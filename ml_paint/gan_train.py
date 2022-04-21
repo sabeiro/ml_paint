@@ -7,24 +7,43 @@ import cv2
 os.environ['LAV_DIR'] = '/home/sabeiro/lav/'
 dL = os.listdir(os.environ['LAV_DIR']+'/src/')
 sys.path = list(set(sys.path + [os.environ['LAV_DIR']+'/src/'+x for x in dL]))
-import gan_keras as g_k
-import gan_spine as g_s
+import ml_paint.gan_keras as g_k
+import ml_paint.gan_spine as g_s
 import importlib
 
 opt = g_s.defOpt()
-opt = {"isNoise":False,"isHomo":True,"isCat":False,"isLoad":True,"isBlur":False,"name":None
-       ,"rotate":True,"batch_size":64
+opt = {"isNoise":False,"isHomo":True,"isCat":False,"isLoad":True,"isBlur":True,"nameF":None,"catF":None
+       ,"rotate":True,"batch_size":20,"smallD":256,"largeD":320,"zoom":4,"n_img":100
        ,"model_name":"model_pers","baseDir":"/home/sabeiro/tmp/pers/"}
 
-importlib.reload(g_s)
-X_source, X_target, labelD = g_s.prepImg(opt['baseDir']+'/mont/h/',opt['isBlur'],nameF=opt['name'])
-opt['img_shape'] = X_source[0].shape
-importlib.reload(g_s)
-importlib.reload(g_k)
-gan = g_k.gan_deep(opt)
-gan.train(200,X_source,X_target,opt,labelD)
+if False: # pix2pix
+    importlib.reload(g_s)
+    importlib.reload(g_k)
+    X_source, X_target, labelD = g_s.prepImg(opt['baseDir']+'/heim/h/',opt)
+    opt['img_shape'] = X_source[0].shape
+    gan = g_k.gan_deep(opt)
+    gan.train(200,X_source,X_target,opt,labelD)
 
-if False:
+    disp = g_s.output2pic(X_target)
+    plt.imshow(disp);plt.show()
+    
+if True: # super resoluton
+    importlib.reload(g_s)
+    importlib.reload(g_k)
+    # opt['smallD'], opt["largeD"] = int(256/4), int(320/4)
+    # opt['n_img'], opt['batch_size'] = 20, 10
+    opt["rotate"], opt['isLoad'] = True, False
+    opt["model_name"] = "model_superRes"
+    X_source, X_target, labelD = g_s.superRes("/home/sabeiro/tmp/pers/heim/",opt)
+    opt['img_shape'] = X_source[0].shape
+    importlib.reload(g_s)
+    importlib.reload(g_k)
+    gan = g_k.superRes(opt)
+    gan.train(200,X_source,X_target,opt,labelD)
+    
+    
+    
+if False: # debug section
     f = "sab-0_ProfiloGoeRit.jpg"
     f = "fra-def_0_20150216_123121.jpg"
     inp = g_s.pic2input(opt['baseDir']+'/img/' + f)
@@ -64,12 +83,3 @@ if False:
     plt.show()
 
 
-if False:
-    opt = {"isNoise":False,"isHomo":True,"isCat":False,"isLoad":True,"isBlur":True,"name":"anìma"
-           ,"model_name":"model_res","baseDir":"/home/sabeiro/tmp/pers/","batch_size":64}
-    X_small, X_large, labelD = g_s.superRes(opt['baseDir']+'/img/',opt['isBlur'],nameF=opt['name'])
-    gan = g_k.superRes(opt)
-    gan.train(200,X_small,X_large,opt,labelD)
-
-
-    

@@ -22,7 +22,11 @@ f = None
 X_source, X_target, labelD = g_s.prepImg(opt['baseDir']+'/img/',nameF=f,catF=None)
 opt['img_shape'] = X_source[0].shape
 gan = g_k.gan_deep(opt)
-res = gan.gen_model.predict(X_source)
-for i in range(len(res)):
-    gan.save_image(res[i:], 300+i, gan.baseDir+'/output/')
+n_step = int(len(X_source)/opt['batch_size'])
+for j in range(opt['batch_size']):
+    n = opt['batch_size']*j
+    X_in = X_source[n:n+opt['batch_size']]
+    res = gan.gen_model.predict(X_in)
+    for i in range(opt['batch_size']):
+        gan.save_image(res[i:],n+i,gan.baseDir+'/output/')
 print("pictures saved")

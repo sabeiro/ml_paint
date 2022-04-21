@@ -9,6 +9,7 @@ import random
 os.environ['LAV_DIR'] = '/home/sabeiro/lav/'
 import matplotlib.image as mpimg
 from keras.layers import Input, Dense, Reshape, Flatten, Dropout, BatchNormalization, Activation, ZeroPadding2D, LeakyReLU, UpSampling2D, Conv2D, Conv2DTranspose, Concatenate
+from keras.layers import UpSampling2D, LeakyReLU, Dense, Input, add, PReLU
 from keras.models import Sequential, Model
 from keras.optimizers import Adam
 from keras.models import model_from_json
@@ -16,7 +17,8 @@ from keras.initializers import RandomNormal
 from keras.optimizers import Adam
 from keras.utils.vis_utils import plot_model
 from keras.models import Input
-from gan_spine import gan_spine
+from ml_paint.gan_spine import gan_spine
+from tensorflow.keras.applications import VGG19
  
 
 class gan_deep(gan_spine):
@@ -39,7 +41,7 @@ class gan_deep(gan_spine):
         g = Activation('relu')(g)
         return g
         
-    def build_gen_model(self,optimizer):
+    def build_gen_model(self):
         init = RandomNormal(stddev=0.02)
         in_image = Input(shape=self.img_shape)
         e1 = self.def_encoder_block(in_image, 64, batchnorm=False)
@@ -65,7 +67,7 @@ class gan_deep(gan_spine):
         # self.gen_model.compile(loss='binary_crossentropy',optimizer=optimizer,metrics=['accuracy'])
         # print(self.gen_model.summary())
         
-    def build_disc_model(self, optimizer):
+    def build_disc_model(self):
         init = RandomNormal(stddev=0.02)
         in_src_image = Input(shape=self.img_shape)
         in_target_image = Input(shape=self.img_shape)
@@ -95,85 +97,97 @@ class gan_deep(gan_spine):
         
 class superRes(gan_spine):
     def __init__(self, opt):
+        self.shape_out = (opt['img_shape'][0]*opt['zoom'],opt['img_shape'][1]*opt['zoom'],opt['img_shape'][2])
         gan_spine.__init__(self, opt)
 
-    def def_encoder_block(self,layer_in, n_filters, batchnorm=True):
-        init = RandomNormal(stddev=0.02)
-        g = Conv2D(n_filters,self.kernel,strides=(2,2),padding='same', kernel_initializer=init)(layer_in)
-        if batchnorm: g = BatchNormalization()(g, training=True)
-        g = LeakyReLU(alpha=0.2)(g)
-        return g
- 
-    def decoder_block(self,layer_in,skip_in,n_filters,dropout=True):
-        init = RandomNormal(stddev=0.02)
-        g = Conv2DTranspose(n_filters,self.kernel,strides=(2,2),padding='same',kernel_initializer=init)(layer_in)
-        g = BatchNormalization()(g,training=True)
-        if dropout: g = Dropout(0.5)(g,training=True)
-        g = Concatenate()([g, skip_in])
-        g = Activation('relu')(g)
-        return g
-        
-    def build_gen_model(self,optimizer):
+    def res_block(self,layer_in): # residual block
+        res_model = Conv2D(64, (3,3), padding = "same")(layer_in)
+        res_model = BatchNormalization(momentum = 0.5)(res_model)
+        res_model = PReLU(shared_axes = [1,2])(res_model)
+        res_model = Conv2D(64, (3,3), padding = "same")(res_model)
+        res_model = BatchNormalization(momentum = 0.5)(res_model)
+        return add([layer_in,res_model])
+
+    def upscale_block(self,layer_in): # upscale block
+        up_model = Conv2D(256, (3,3), padding="same")(layer_in)
+        up_model = UpSampling2D( size = 2 )(up_model)
+        up_model = PReLU(shared_axes=[1,2])(up_model)
+        return up_model
+
+    def disc_block(self, layer_in, filters, strides=1, bn=True):
+        disc_model = Conv2D(filters, (3,3), strides, padding="same")(layer_in)
+        disc_model = LeakyReLU( alpha=0.2 )(disc_model)
+        if bn:
+            disc_model = BatchNormalization( momentum=0.8 )(disc_model)
+        #disc_model = Dropout(0.5)(disc_model,training=True)
+        return disc_model
+    
+    def build_gen_model(self): 
         init = RandomNormal(stddev=0.02)
         in_image = Input(shape=self.img_shape)
-        e1 = self.def_encoder_block(in_image, 64, batchnorm=False)
-        e2 = self.def_encoder_block(e1, 128)
-        e3 = self.def_encoder_block(e2, 256)
-        e4 = self.def_encoder_block(e3, 512)
-        e5 = self.def_encoder_block(e4, 512)
-        # e6 = self.def_encoder_block(e5, 512)
-        # e7 = self.def_encoder_block(e6, 512)
-        b = Conv2D(512,self.kernel,strides=(2,2),padding='same',kernel_initializer=init)(e5)
-        b = Activation('relu')(b)
-        # d1 = self.decoder_block(b, e7, 512)
-        # d2 = self.decoder_block(d1, e6, 512)
-        d3 = self.decoder_block(b, e5, 512)
-        d4 = self.decoder_block(d3, e4, 512, dropout=False)
-        d5 = self.decoder_block(d4, e3, 256, dropout=False)
-        d6 = self.decoder_block(d5, e2, 128, dropout=False)
-        d7 = self.decoder_block(d6, e1, 64, dropout=False)
-        d8 = self.decoder_block(d7, e1, 64, dropout=False)
-        d9 = self.decoder_block(d8, e1, 64, dropout=False)
-        g = Conv2DTranspose(3,self.kernel,strides=(2,2),padding='same',kernel_initializer=init)(d7)
-        out_image = Activation('tanh')(g)
-        self.gen_model = Model(in_image, out_image)
-        plot_model(self.gen_model,to_file=self.baseDir+'model_gan/gen_model.png',show_shapes=True,show_layer_names=True)
-        # self.gen_model.compile(loss='binary_crossentropy',optimizer=optimizer,metrics=['accuracy'])
-        # print(self.gen_model.summary())
+        num_res_block = 2
+        layers = Conv2D(64, (9,9), padding="same")(in_image)
+        layers = PReLU(shared_axes=[1,2])(layers)
+        temp = layers
+        for i in range(num_res_block):
+            layers = self.res_block(layers)
+        layers = Conv2D(64, (3,3), padding="same")(layers)
+        layers = BatchNormalization(momentum=0.5)(layers)
+        layers = add([layers,temp])
+        layers = self.upscale_block(layers)
+        layers = self.upscale_block(layers)
+        op = Conv2D(3, (9,9), padding="same")(layers)
+        self.gen_model = Model(inputs=in_image, outputs=op, name="generative")
+        plot_model(self.gen_model,to_file=self.baseDir+'model_gan/gen_superRes.png',show_shapes=True,show_layer_names=True)
         
-    def build_disc_model(self, optimizer):
+    def build_disc_model(self):
         init = RandomNormal(stddev=0.02)
-        in_src_image = Input(shape=self.img_shape)
-        in_target_image = Input(shape=self.img_shape*4)
-        merged = Concatenate()([in_src_image, in_target_image])
-        d = Conv2D(64, self.kernel, strides=(2,2), padding='same', kernel_initializer=init)(merged)
-        d = LeakyReLU(alpha=0.2)(d)
-        d = Conv2D(128, self.kernel, strides=(2,2), padding='same', kernel_initializer=init)(d)
-        d = BatchNormalization()(d)
-        d = LeakyReLU(alpha=0.2)(d)
-        d = Conv2D(256, self.kernel, strides=(2,2), padding='same', kernel_initializer=init)(d)
-        d = BatchNormalization()(d)
-        d = LeakyReLU(alpha=0.2)(d)
-        d = Conv2D(512, self.kernel, strides=(2,2), padding='same', kernel_initializer=init)(d)
-        d = BatchNormalization()(d)
-        d = LeakyReLU(alpha=0.2)(d)
-        d = Conv2D(512, self.kernel, padding='same', kernel_initializer=init)(d)
-        d = BatchNormalization()(d)
-        d = LeakyReLU(alpha=0.2)(d)
-        d = Conv2D(1, self.kernel, padding='same', kernel_initializer=init)(d)
-        patch_out = Activation('sigmoid')(d)
-        self.disc_model = Model([in_src_image, in_target_image], patch_out)
+        src_img = Input(shape=self.img_shape,name="low_res")
+        trg_img = Input(shape=self.shape_out,name="high_res")
+        df = 64
+        dfL = [df,df,df*2,df*2,df*4,df*4,df*8,df*8,df*16,df*16]
+        n_disc_block = 8
+        d = self.disc_block(trg_img, df, bn=False)
+        for i in range(1,n_disc_block):
+            d = self.disc_block(d, dfL[i], strides=2, bn=True)
+        d8_5 = Flatten()(d)
+        d9 = Dense(df*16)(d8_5)
+        d10 = LeakyReLU(alpha=0.2)(d9)
+        validity = Dense(1, activation='sigmoid')(d10)
+        self.disc_model = Model([src_img,trg_img], validity, name="discriminative")
         opt = Adam(learning_rate=0.0002, beta_1=0.5)
-        self.disc_model.compile(loss='binary_crossentropy', optimizer=opt, loss_weights=[0.5])
+        self.disc_model.compile(loss="binary_crossentropy",optimizer=opt)
         #self.disc_model.trainable = False
-        plot_model(self.disc_model,to_file=self.baseDir+'model_gan/disc_model.png',show_shapes=True,show_layer_names=True)
-        # print(self.disc_model.summary())
+        plot_model(self.disc_model,to_file=self.baseDir+'model_gan/disc_superRes.png',show_shapes=True,show_layer_names=True)
 
+    def build_vgg(self):
+        #vgg = VGG19(weights="imagenet")
+        vgg = VGG19(weights="imagenet",input_shape=self.shape_out,include_top=False)
+        vgg.outputs = [vgg.layers[9].output]
+        trg_img = Input(shape=self.shape_out)
+        img_features = vgg(trg_img)
+        return Model(img, img_features)
+
+    def build_gan1(self):
+        src_img = Input(shape=self.img_shape,name="low_res")
+        trg_img = Input(shape=self.shape_out,name="high_res")
+        gen_out = self.gen_model(src_img)
+        disc_out = self.disc_model([trg_img,gen_out])
+        self.disc_model.trainable = False
+        vgg = self.build_vgg()
+        vgg.trainable = False
+        gen_features = vgg(gen_img)
+        validity = self.disc_model(gen_out)
+        self.gan = Model([src_img, trg_img],[validity,gen_features])
+        opt = Adam(learning_rate=0.0002, beta_1=0.5)
+        self.gan.compile(loss=["binary_crossentropy","mse"],loss_weights=[1e-3, 1],optimizer=opt)
+        plot_model(self.gan,to_file=self.baseDir+'model_gan/gan_superRes.png',show_shapes=True,show_layer_names=True)
+        
         
 class gan_keras(gan_spine):
     def __init__(self, opt):
         gan_spine.__init__(self, opt)
-    
+        
     def build_gen_model(self,optimizer):
         gen_input = Input(shape=self.img_shape)
         img_start = tuple([int(x/4.) for x in self.img_shape])

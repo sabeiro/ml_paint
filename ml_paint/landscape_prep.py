@@ -9,7 +9,7 @@ gc.isenabled()
   
 baseDir = "/home/sabeiro/lav/src/gen/"
 wrtDir = "/home/sabeiro/tmp/pers/"
-imgDir = "/home/sabeiro/Pictures/mont/"
+imgDir = "/home/sabeiro/Pictures/heim/"
 shortL = 256
 longL = 320
 
@@ -27,10 +27,10 @@ def procImg(f):
         return 0
     if img.shape[0] > img.shape[1]: 
         res = cv2.resize(img,dsize=(shortL,longL),interpolation=cv2.INTER_CUBIC)
-        cv2.imwrite(wrtDir+"/mont/v/"+d+"-"+f, res)
+        cv2.imwrite(wrtDir+"/heim/v/"+d+"-"+f, res)
     else:
         res = cv2.resize(img,dsize=(longL,shortL),interpolation=cv2.INTER_CUBIC)
-        cv2.imwrite(wrtDir+"/mont/h/"+d+"-"+f, res)
+        cv2.imwrite(wrtDir+"/heim/h/"+d+"-"+f, res)
     del img
     gc.collect()
     return 1
