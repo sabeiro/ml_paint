@@ -10,3 +10,4 @@ cv2
 imageio
 PIL
 boto3
+git+https://github.com/sabeiro/albio.git	
