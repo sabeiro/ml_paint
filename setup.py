@@ -35,8 +35,8 @@ def reqs(*f):
     return [req for subreq in _reqs(*f) for req in subreq]
 
 
-install_requires = reqs('base.txt')
-test_requires = reqs('test.txt') + install_requires
+install_requires = reqs('requirements.txt')
+test_requires = install_requires
 
 setup(
     author="Giovanni Marelli",
@@ -55,8 +55,8 @@ setup(
     },
     long_description=readme + '\n\n' + history,
     include_package_data=True,
-    keywords='albio',
-    name='albio',
+    keywords='ml_paint',
+    name='ml_paint',
     setup_requires=install_requires,
     install_requires=install_requires,
     test_suite='tests',
