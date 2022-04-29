@@ -9,7 +9,7 @@ gc.isenabled()
   
 baseDir = "/home/sabeiro/lav/src/gen/"
 wrtDir = "/home/sabeiro/tmp/pers/"
-imgDir = "/home/sabeiro/Pictures/heim/"
+imgDir = "/home/sabeiro/Pictures/mont/"
 shortL = 256
 longL = 320
 

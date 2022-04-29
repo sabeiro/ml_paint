@@ -1,47 +1,73 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import os, sys
-import cv2
 os.environ['LAV_DIR'] = '/home/sabeiro/lav/'
 dL = os.listdir(os.environ['LAV_DIR']+'/src/')
 sys.path = list(set(sys.path + [os.environ['LAV_DIR']+'/src/'+x for x in dL]))
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+os.environ['TF_ENABLE_GPU_GARBAGE_COLLECTION']='false'
+os.environ['TF_GPU_ALLOCATOR']='cuda_malloc_async'
 import ml_paint.gan_keras as g_k
 import ml_paint.gan_spine as g_s
 import importlib
+import cv2
 
 opt = g_s.defOpt()
-opt = {"isNoise":False,"isHomo":True,"isCat":False,"isLoad":True,"isBlur":True,"nameF":None,"catF":None
+opt = {"isNoise":False,"isHomo":True,"isCat":False,"isLoad":True,"isBlur":False,"nameF":None,"catF":None
        ,"rotate":True,"batch_size":20,"smallD":256,"largeD":320,"zoom":4,"n_img":100
-       ,"model_name":"model_pers","baseDir":"/home/sabeiro/tmp/pers/"}
+       ,"model_name":"model_pers","baseDir":"/home/sabeiro/tmp/pers/"
+       ,"imgDir":"/home/sabeiro/tmp/pers/heim/h/","isS3":False}
+
+fL = g_s.listFile(opt['imgDir'])
 
 if False: # pix2pix
     importlib.reload(g_s)
     importlib.reload(g_k)
-    X_source, X_target, labelD = g_s.prepImg(opt['baseDir']+'/heim/h/',opt)
-    opt['img_shape'] = X_source[0].shape
+    opt["rotate"], opt['isBlur'] = True, True
     gan = g_k.gan_deep(opt)
-    gan.train(200,X_source,X_target,opt,labelD)
-
-    disp = g_s.output2pic(X_target)
-    plt.imshow(disp);plt.show()
+    for i in range(20):
+        fL = g_s.listFile(opt['imgDir'],opt['n_img'])
+        X_source, X_target, labelD = g_s.prepImg(fL,opt)
+        gan.train(20,X_source,X_target,opt,labelD)
+        
+    if False:
+        disp = g_s.output2pic(X_source)
+        disp = g_s.output2pic(X_target)
+        plt.imshow(disp);plt.show()
     
 if True: # super resoluton
-    importlib.reload(g_s)
-    importlib.reload(g_k)
     # opt['smallD'], opt["largeD"] = int(256/4), int(320/4)
-    # opt['n_img'], opt['batch_size'] = 20, 10
-    opt["rotate"], opt['isLoad'] = True, False
+    opt['n_img'], opt['batch_size'], opt['zoom'] = 20, 10, 2
+    opt['isLoad'] = True
     opt["model_name"] = "model_superRes"
-    X_source, X_target, labelD = g_s.superRes("/home/sabeiro/tmp/pers/heim/",opt)
-    opt['img_shape'] = X_source[0].shape
     importlib.reload(g_s)
     importlib.reload(g_k)
-    gan = g_k.superRes(opt)
-    gan.train(200,X_source,X_target,opt,labelD)
+    gan = g_k.superRes2(opt)
+    gan.gen_model.summary()
+    for i in range(20):
+        fL = g_s.listFile(opt['imgDir'],opt['n_img'])
+        X_source, X_target, labelD = g_s.superRes(fL,opt)
+        gan.train(10,X_source,X_target,opt,labelD)
+        
+        X_pred = gan.gen_model.predict(X_source[:20])
+        disp = (X_source[0]*0.5 + 0.5)*255
+        disp = np.array(disp,dtype = np.uint8)
+        if opt['rotate']:
+            disp = cv2.rotate(disp, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
+        disp = cv2.resize(disp,dsize=(opt['largeD']*opt['zoom']
+                                      ,opt['smallD']*opt['zoom']),interpolation=cv2.INTER_CUBIC)
+        disp = cv2.cvtColor(disp,cv2.COLOR_RGB2BGR)
+        cv2.imwrite(gan.baseDir+"/%05d.jpg"%301,disp)
+        gan.save_image(X_target,302,gan.baseDir)
+        gan.save_image(X_pred,303,gan.baseDir)
+
     
-    
+        
+    disp = g_s.output2pic(X_target)
+    importlib.reload(g_s)
+    disp = g_s.readPic(fL[0])
+    plt.imshow(disp);plt.show()
+
     
 if False: # debug section
     f = "sab-0_ProfiloGoeRit.jpg"

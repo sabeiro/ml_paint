@@ -17,21 +17,157 @@ from keras.optimizers import Adam
 from keras.utils.vis_utils import plot_model
 from keras.models import Input
 import albio.img_proc as i_p
+try:
+    import boto3, io
+    import tempfile
+    s3 = boto3.resource('s3', region_name='eu-central-1')
+    s3client = boto3.client('s3')
+    bucket = s3.Bucket('dauvi')
+except:
+    print("no s3 support")
+    
 
 def defOpt():
-    opt = {"isNoise":False,"isHomo":True,"isCat":False,"isLoad":True,"isBlur":False,"name":None
-           ,"rotate":True,"batch_size":64,"smallD":256,"largeD":320,"zoom":4,"n_img":None
-           ,"model_name":"model_pers","baseDir":"/home/sabeiro/tmp/pers/"}
+    opt = {"isNoise":False,"isHomo":True,"isCat":False,"isLoad":True,"isBlur":False,"nameF":None,"catF":None
+       ,"rotate":True,"batch_size":20,"smallD":256,"largeD":320,"zoom":4,"n_img":100
+       ,"model_name":"model_pers","baseDir":"/home/sabeiro/tmp/pers/"
+       ,"imgDir":"/home/sabeiro/tmp/pers/heim/h/","isS3":False}
     return opt
 
+
+def readPic(f):
+    img = mpimg.imread(f)
+    #img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+    if img.shape[1]>img.shape[0]: img = cv2.rotate(img, cv2.cv2.ROTATE_90_CLOCKWISE)
+    return img
+
+def readPics3(f):
+    fileO = bucket.Object(f)
+    file_stream = io.StringIO()
+    #fileO.download_fileobj(file_stream)
+    #img = mpimg.imread(fileO)
+    tmp = tempfile.NamedTemporaryFile()
+    with open(tmp.name, 'wb') as f1:
+        fileO.download_fileobj(f1)
+        img = cv2.imread(tmp.name)
+    if img.shape[1]>img.shape[0]: img = cv2.rotate(img, cv2.cv2.ROTATE_90_CLOCKWISE)
+    return img
+
+def pic2input(f):
+    img = readPic(f)
+    img = np.array(img) / 127.5 - 1.
+    return np.reshape(img,(1,) + img.shape)
+
+def output2pic(res):
+    disp = (res[0]*0.5 + 0.5)*255
+    return np.array(disp,dtype = np.uint8)
+
+def normImg(img):
+    if len(img.shape) == 3:
+        if img.shape[2] == 4:
+            img = img[:,:,:3]
+    if len(img.shape) == 2:
+        img1 = np.zeros(img.shape + (3,))
+        for d in range(3): img1[:,:,d] = img
+        img1 = np.array(img1,dtype = np.uint8)
+        img = img1
+    return img
+
+def listFile(imgDir,n_img=None):
+    fL = []
+    fL1 = os.listdir(imgDir)
+    for d in fL1:
+        if os.path.isdir(imgDir+"/"+d):
+            fL2 = os.listdir(imgDir+"/"+d)
+            for f in fL2:
+                fL.append(imgDir+"/"+d+"/"+f)
+        else:
+            fL.append(imgDir+"/"+d)
+    random.shuffle(fL)
+    if n_img: fL = fL[:n_img]
+    return fL
+
+def prepImg(fL,opt):
+    blur_x, blur_y = 0, 0
+    X_target, X_filter, labelL = [], [], []
+    img = mpimg.imread(projDir + fL[0])
+    h, w, l = img.shape
+    image_stack = np.ones((2, 2, 18))
+    padW = int(abs(480-w)/2)
+    padH = int(abs(480-h)/2)
+    n_img = 0
+    for f in fL:
+        rotation = False
+        name = f.split(os.path.sep)[-1].split("-")[0]
+        if opt['nameF']:
+            if f != opt['nameF']: continue
+        if opt['catF']:
+            if name != opt['catF']: continue
+        if opt['isS3']: img = readPicS3(projDir + f)
+        else: img = readPic(projDir + f)
+        img = cv2.resize(img,dsize=(256,320),interpolation=cv2.INTER_CUBIC)
+        img = normImg(img)
+        if img.shape[1]>img.shape[0]: rotation = True
+        if opt['isBlur']: blur = cv2.GaussianBlur(img,(3, 3), 30)
+        else: blur = img
+        #img = np.pad(img,((padH,padH),(padW,padW),(0, 0)),mode='constant',constant_values=0)
+        #img = cv2.resize(img,dsize=(256,256),interpolation=cv2.INTER_CUBIC)
+        imgV, metaD = i_p.imgDec(img)
+        metaD['name'] = name
+        metaD['rotation'] = rotation
+        X_target.append(img)
+        X_filter.append(blur)
+        labelL.append(metaD)
+        n_img += 1
+
+    if len(labelL) == 0:
+        print("no image found")
+        return [], [], {}
+    X_target = np.array(X_target) / 127.5 - 1.
+    X_filter = np.array(X_filter) / 127.5 - 1.
+    labelD = {}
+    for k in labelL[0].keys(): labelD[k] = [v[k] for v in labelL]
+    return X_filter, X_target, labelD
+
+
+def superRes(fL,opt):
+    smallD, largeD, zoom = opt['smallD'], opt['largeD'], opt['zoom']
+    smallL, largeL, labelL = [], [], []
+    n_img = 0
+    for f in fL:
+        rotation = False
+        name = f.split(os.path.sep)[-1].split("-")[0]
+        if opt['nameF']:
+            if f != opt['nameF']: continue
+            if opt['catF']:
+                if name != opt['catF']: continue
+        if opt['isS3']: img = readPicS3(projDir + f)
+        else: img = readPic(projDir + f)
+        img = normImg(img)
+        if img.shape[1]>img.shape[0]: rotation = True
+        if opt['isBlur']: img = cv2.GaussianBlur(img,(23, 23), 30)
+        small = cv2.resize(img,dsize=(smallD,largeD),interpolation=cv2.INTER_CUBIC)
+        large = cv2.resize(img,dsize=(smallD*zoom,largeD*zoom),interpolation=cv2.INTER_CUBIC)
+        smallL.append(small)
+        largeL.append(large)
+        metaD = i_p.metaImg(img)
+        metaD['name'] = name
+        labelL.append(metaD)
+        n_img += 1
+        if opt['n_img']:
+            if n_img >= opt['n_img']: break
+    X_small = np.array(smallL)/127.5 - 1.
+    X_large = np.array(largeL)/127.5 - 1.
+    labelD = {}
+    for k in labelL[0].keys(): labelD[k] = [v[k] for v in labelL]
+    return X_small, X_large, labelD
 
 class gan_spine():
     def __init__(self, opt):
         optimizer = Adam(0.0002, 0.5)
         self.history = []
-        self.img_shape = opt['img_shape']
-        self.channels = opt['img_shape'][-1]
-        self.latent_dim = (int(opt['img_shape'][0]/4),int(opt['img_shape'][1]/4),1)
+        self.img_shape = (opt['largeD'],opt['smallD'],3)
+        self.channels = 3
         self.baseDir = opt['baseDir']
         self.kernel = (4,4)
         self.opt = opt
@@ -80,7 +216,7 @@ class gan_spine():
         print ("Loss: real %.4f fake %.4f gen %.4f label %s" % (loss_real,loss_fake,gen_loss,label))
         print ("---------------------------------------------------------")
         self.history.append({"D":loss_real,"G":gen_loss})
-        namePref = self.baseDir + "model_gan/"+self.opt['model_name']
+        namePref = self.baseDir + "model_gan/" + self.opt['model_name']
         if epoch % 1 == 0:
             self.save_image(generated, epoch, self.baseDir + "/generated/")
             self.plot_loss()
@@ -96,6 +232,7 @@ class gan_spine():
             print("Saved model to disk")
 
     def train(self,n_epoch,X_source,X_target,opt,labelD={}):
+        opt = self.opt
         batch_size = opt['batch_size']
         dim_disc = tuple(self.disc_model.layers[-1].output.shape)
         dim_disc = (batch_size,) + dim_disc[1:]
@@ -103,7 +240,7 @@ class gan_spine():
         y_fake = np.zeros(dim_disc)
         label = 'all'
         for epoch in range(n_epoch):
-            if labelD and opt['isCat']:
+            if labelD and self.opt['isCat']:
                 label = random.choice(list(labelD.keys()))
                 v = random.choice(labelD[label])
                 l = [x == v for x in labelD[label]]
@@ -118,11 +255,12 @@ class gan_spine():
             self.update(epoch,label,X_fake,loss_real,loss_fake,gen_loss)
             
     def save_image(self, generated, epoch, directory):
-        disp = 0.5 * generated[0] + 0.5
+        disp = (generated[0]*0.5 + 0.5)*255
+        disp = np.array(disp,dtype = np.uint8)
         if self.opt['rotate']:
             disp = cv2.rotate(disp, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
-        #disp = cv2.cvtColor(disp*256,cv2.COLOR_RGB2BGR)
-        cv2.imwrite(directory+"/%05d.jpg"%epoch,disp*256)
+        disp = cv2.cvtColor(disp,cv2.COLOR_RGB2BGR)
+        cv2.imwrite(directory+"/%05d.jpg"%epoch,disp)
         # height, width, channel = self.img_shape
         # plt.clf()
         # fig = plt.figure(frameon=False)
@@ -191,109 +329,4 @@ class gan_spine():
         plt.savefig(self.baseDir + 'history.png')
         plt.clf()
         plt.close('all')
-
-def readPic(f):
-    img = mpimg.imread(f)
-    #img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-    if img.shape[1]>img.shape[0]: img = cv2.rotate(img, cv2.cv2.ROTATE_90_CLOCKWISE)
-    img = cv2.resize(img,dsize=(256,320),interpolation=cv2.INTER_CUBIC)
-    return img
-        
-def pic2input(f):
-    img = readPic(f)
-    img = np.array(img) / 127.5 - 1.
-    return np.reshape(img,(1,) + img.shape)
-
-def output2pic(res):
-    disp = (res[0]*0.5 + 0.5)*255
-    return np.array(disp,dtype = np.uint8)
-
-def normImg(img):
-    if len(img.shape) == 3:
-        if img.shape[2] == 4:
-            img = img[:,:,:3]
-    if len(img.shape) == 2:
-        img1 = np.zeros(img.shape + (3,))
-        for d in range(3): img1[:,:,d] = img
-        img1 = np.array(img1,dtype = np.uint8)
-        img = img1
-    return img
-
-def prepImg(projDir,opt):
-    blur_x, blur_y = 0, 0
-    fL = os.listdir(projDir)
-    X_target, X_filter, labelL = [], [], []
-    img = mpimg.imread(projDir + fL[0])
-    h, w, l = img.shape
-    image_stack = np.ones((2, 2, 18))
-    padW = int(abs(480-w)/2)
-    padH = int(abs(480-h)/2)
-    n_img = 0
-    for f in fL:
-        rotation = False
-        name = f.split(os.path.sep)[-1].split("-")[0]
-        if opt['nameF']:
-            if f != opt['nameF']: continue
-        if opt['catF']:
-            if name != opt['catF']: continue
-        img = readPic(projDir + f)
-        img = normImg(img)
-        if img.shape[1]>img.shape[0]: rotation = True
-        if opt['isBlur']:
-            img = cv2.GaussianBlur(img,(23, 23), 30)
-        #img = np.pad(img,((padH,padH),(padW,padW),(0, 0)),mode='constant',constant_values=0)
-        #img = cv2.resize(img,dsize=(256,256),interpolation=cv2.INTER_CUBIC)
-        imgV, metaD = i_p.imgDec(img)
-        metaD['name'] = name
-        metaD['rotation'] = rotation
-        X_target.append(img)
-        X_filter.append(imgV[1])
-        labelL.append(metaD)
-        n_img += 1
-        if opt['n_img']:
-            if n_img >= opt['n_img']: break
-
-    if len(labelL) == 0:
-        print("no image found")
-        return [], [], {}
-    X_target = np.array(X_target) / 127.5 - 1.
-    X_filter = np.array(X_filter) / 127.5 - 1.
-    labelD = {}
-    for k in labelL[0].keys(): labelD[k] = [v[k] for v in labelL]
-    return X_filter, X_target, labelD
-
-
-def superRes(projDir,opt):
-    dL = os.listdir(projDir)
-    smallD, largeD, zoom = opt['smallD'], opt['largeD'], opt['zoom']
-    smallL, largeL, labelL = [], [], []
-    n_img = 0
-    for d in dL:
-        fL = os.listdir(projDir + "/" + d)
-        for f in fL:
-            rotation = False
-            name = f.split(os.path.sep)[-1].split("-")[0]
-            if opt['nameF']:
-                if f != opt['nameF']: continue
-            if opt['catF']:
-                if name != opt['catF']: continue
-            img = readPic(projDir + "/" + d + "/" + f)
-            img = normImg(img)
-            if img.shape[1]>img.shape[0]: rotation = True
-            if opt['isBlur']: img = cv2.GaussianBlur(img,(23, 23), 30)
-            small = cv2.resize(img,dsize=(smallD,largeD),interpolation=cv2.INTER_CUBIC)
-            large = cv2.resize(img,dsize=(smallD*zoom,largeD*zoom),interpolation=cv2.INTER_CUBIC)
-            smallL.append(small)
-            largeL.append(large)
-            metaD = i_p.metaImg(img)
-            metaD['name'] = name
-            labelL.append(metaD)
-            n_img += 1
-            if opt['n_img']:
-                if n_img >= opt['n_img']: break
-    X_small = np.array(smallL)/127.5 - 1.
-    X_large = np.array(largeL)/127.5 - 1.
-    labelD = {}
-    for k in labelL[0].keys(): labelD[k] = [v[k] for v in labelL]
-    return X_small, X_large, labelD
 
