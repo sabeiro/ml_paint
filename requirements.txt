@@ -6,8 +6,8 @@ scipy
 sklearn
 statsmodels
 tensorflow
-cv2
+opencv-python
 imageio
-PIL
+#PIL
 boto3
-git+https://github.com/sabeiro/albio.git	
+#git+https://github.com/sabeiro/albio.git	

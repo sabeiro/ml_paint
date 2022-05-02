@@ -37,14 +37,25 @@ class text_gen():
         # text = text.translate(str.maketrans(" "," ", punctuation))
         #text = text.translate(str.maketrans(string.punctuation, ' ' * len(string.punctuation))).replace(' '*4, ' ').replace(' '*3, ' ').replace(' '*2, ' ').strip()
         #text = re.sub("\n"," ",text)
-        text = re.sub('"'," ",text)
+        #text = re.sub('"'," ",text)
         text = re.sub("  "," ",text)
         if hasattr(self,'vocab'):
             text = ''.join(c for c in text if c in self.vocab)
         return text
 
+    def load_vocab(self,fName):
+        vocab = open(fName, "r").read()
+        print(vocab)
+        print("vocab size %d" % (len(vocab)))
+        save_path = self.opt['baseDir']+self.opt['cName']
+        char2int = {c: i for i, c in enumerate(vocab)}
+        int2char = {i: c for i, c in enumerate(vocab)}
+        pickle.dump(char2int, open(save_path+"-char2int.pickle", "wb"))
+        pickle.dump(int2char, open(save_path+"-int2char.pickle", "wb"))
+        pickle.dump(vocab, open(save_path+"-vocab.pickle", "wb"))
+
     def gen_coding(self,text):
-        text = self.clean_text(text)
+        #text = self.clean_text(text)
         save_path = self.opt['baseDir']+self.opt['cName']
         n_chars = len(text)
         vocab = ''.join(sorted(set(text)))
@@ -124,7 +135,7 @@ class text_gen():
         generated = ""
         for i in tqdm.tqdm(range(n_chars), "Generating text"):
             X = np.zeros((1, sequence_length, n_unique_chars))
-            for t, char in enumerate(seed):
+            for t, char in enumerate(s):
                 X[0, (sequence_length - len(seed)) + t, self.char2int[char]] = 1
             predicted = self.gen_model.predict(X, verbose=0)[0]
             next_index = np.argmax(predicted)
