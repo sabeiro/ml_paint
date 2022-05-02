@@ -40,7 +40,7 @@ def readPic(f):
     if img.shape[1]>img.shape[0]: img = cv2.rotate(img, cv2.cv2.ROTATE_90_CLOCKWISE)
     return img
 
-def readPics3(f):
+def readPicS3(f):
     fileO = bucket.Object(f)
     file_stream = io.StringIO()
     #fileO.download_fileobj(file_stream)
