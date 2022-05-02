@@ -14,7 +14,6 @@ from keras.models import Sequential, Model
 from keras.models import model_from_json
 from keras.initializers import RandomNormal
 #from keras.optimizers import Adam
-from tensorflow.keras.optimizers import Adam
 from keras.utils.vis_utils import plot_model
 from keras.models import Input
 import keras
@@ -95,8 +94,8 @@ class gan_deep(gan_spine):
         d = Conv2D(1, self.kernel, padding='same', kernel_initializer=init)(d)
         patch_out = Activation('sigmoid')(d)
         self.disc_model = Model([in_src_image, in_target_image], patch_out)
-        opt = Adam(learning_rate=0.0002, beta_1=0.5)
-        self.disc_model.compile(loss='binary_crossentropy', optimizer=opt, loss_weights=[0.5])
+        ##opt = Adam(learning_rate=0.0002, beta_1=0.5)
+        self.disc_model.compile(loss='binary_crossentropy', optimizer="adam", loss_weights=[0.5])
         #self.disc_model.trainable = False
         plot_model(self.disc_model,to_file=self.baseDir+'model_gan/disc_model.png',show_shapes=True,show_layer_names=True)
         # print(self.disc_model.summary())
@@ -239,8 +238,8 @@ class superRes(gan_spine):
         d10 = LeakyReLU(alpha=0.2)(d9)
         validity = Dense(1, activation='sigmoid')(d10)
         self.disc_model = Model([src_img,trg_img], validity, name="discriminative")
-        opt = Adam(learning_rate=0.0002, beta_1=0.5)
-        self.disc_model.compile(loss="binary_crossentropy",optimizer=opt)
+        #opt = Adam(learning_rate=0.0002, beta_1=0.5)
+        self.disc_model.compile(loss="binary_crossentropy",optimizer="adam")
         #self.disc_model.trainable = False
         plot_model(self.disc_model,to_file=self.baseDir+'model_gan/disc_superRes.png',show_shapes=True,show_layer_names=True)
 
@@ -263,8 +262,8 @@ class superRes(gan_spine):
         gen_features = vgg(gen_img)
         validity = self.disc_model(gen_out)
         self.gan = Model([src_img, trg_img],[validity,gen_features])
-        opt = Adam(learning_rate=0.0002, beta_1=0.5)
-        self.gan.compile(loss=["binary_crossentropy","mse"],loss_weights=[1e-3, 1],optimizer=opt)
+        #opt = Adam(learning_rate=0.0002, beta_1=0.5)
+        self.gan.compile(loss=["binary_crossentropy","mse"],loss_weights=[1e-3, 1],optimizer="adam")
         plot_model(self.gan,to_file=self.baseDir+'model_gan/gan_superRes.png',show_shapes=True,show_layer_names=True)
 
 class superRes2(gan_spine):
@@ -291,9 +290,9 @@ class superRes2(gan_spine):
         json_file.close()
         loaded_model.load_weights(namePref + '_gen.h5')
         self.gen_model = loaded_model
-        optimizer = Adam(learning_rate=0.001)
+        #optimizer = Adam(learning_rate=0.001)
         loss_fn = keras.losses.MeanSquaredError()
-        self.gen_model.compile(optimizer=optimizer,loss=loss_fn)
+        self.gen_model.compile(optimizer="adam",loss=loss_fn)
         # print(self.gen_model.summary())
 
     def residual_block(self,in_lay,kernal_size,filters,strides):
@@ -407,9 +406,9 @@ class superRes2(gan_spine):
         # model = Model(init, x)
         
         self.gen_model = model
-        optimizer = Adam(learning_rate=0.001)
+        #optimizer = Adam(learning_rate=0.001)
         loss_fn = keras.losses.MeanSquaredError()
-        self.gen_model.compile(optimizer=optimizer,loss=loss_fn)
+        self.gen_model.compile(optimizer="adam",loss=loss_fn)
         plot_model(self.gen_model,to_file=self.baseDir+'model_gan/gen_superRes.png',show_shapes=True,show_layer_names=True)
 
     class update(keras.callbacks.Callback):

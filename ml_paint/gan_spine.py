@@ -10,10 +10,9 @@ os.environ['LAV_DIR'] = '/home/sabeiro/lav/'
 import matplotlib.image as mpimg
 from keras.layers import Input, Dense, Reshape, Flatten, Dropout, BatchNormalization, Activation, ZeroPadding2D, LeakyReLU, UpSampling2D, Conv2D, Conv2DTranspose, Concatenate
 from keras.models import Sequential, Model
-from keras.optimizers import Adam
+#from keras.optimizers import Adam
 from keras.models import model_from_json
 from keras.initializers import RandomNormal
-from keras.optimizers import Adam
 from keras.utils.vis_utils import plot_model
 from keras.models import Input
 import albio.img_proc as i_p
@@ -164,7 +163,7 @@ def superRes(fL,opt):
 
 class gan_spine():
     def __init__(self, opt):
-        optimizer = Adam(0.0002, 0.5)
+        #optimizer = Adam(0.0002, 0.5)
         self.history = []
         self.img_shape = (opt['largeD'],opt['smallD'],3)
         self.channels = 3
@@ -190,8 +189,8 @@ class gan_spine():
         disc_out = self.disc_model([gen_in,gen_out])
         # gan = Model(gen_in, disc_output)
         self.gan = Model(gen_in, [disc_out, gen_out])
-        opt = Adam(learning_rate=0.0002, beta_1=0.5)
-        self.gan.compile(loss=['binary_crossentropy', 'mae'], optimizer=opt, loss_weights=[1,100])
+        #opt = Adam(learning_rate=0.0002, beta_1=0.5)
+        self.gan.compile(loss=['binary_crossentropy', 'mae'], optimizer="adam", loss_weights=[1,100])
         plot_model(self.gan,to_file=self.baseDir+'model_gan/gan_model.png',show_shapes=True,show_layer_names=True)
 
     def gen_real(self, trainA, trainB, batch_size,isHomo=False):
@@ -306,8 +305,8 @@ class gan_spine():
         json_file.close()
         loaded_model.load_weights(namePref + '_disc.h5')
         self.disc_model = loaded_model
-        opt = Adam(learning_rate=0.0002, beta_1=0.5)
-        self.disc_model.compile(loss='binary_crossentropy', optimizer=opt, loss_weights=[0.5])
+        #opt = Adam(learning_rate=0.0002, beta_1=0.5)
+        self.disc_model.compile(loss='binary_crossentropy', optimizer="adam", loss_weights=[0.5])
         self.disc_model.trainable = False
         # print(self.disc_model.summary())
 
