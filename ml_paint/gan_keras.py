@@ -11,7 +11,7 @@ import matplotlib.image as mpimg
 from keras.layers import Input, Dense, Reshape, Flatten, Dropout, BatchNormalization, Activation, ZeroPadding2D, LeakyReLU, UpSampling2D, Conv2D, Conv2DTranspose, Concatenate
 from keras.layers import UpSampling2D, LeakyReLU, Dense, Input, add, PReLU, Concatenate, Average
 from keras.models import Sequential, Model
-from keras.optimizers import Adam
+from keras.optimizers import adam_v2 as Adam
 from keras.models import model_from_json
 from keras.initializers import RandomNormal
 from keras.optimizers import Adam
