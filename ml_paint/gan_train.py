@@ -14,7 +14,7 @@ import cv2
 
 opt = g_s.defOpt()
 opt = {"isNoise":False,"isHomo":True,"isCat":False,"isLoad":True,"isBlur":False,"nameF":None,"catF":None
-       ,"rotate":True,"batch_size":20,"smallD":256,"largeD":320,"zoom":4,"n_img":100
+       ,"rotate":True,"batch_size":20,"smallD":256,"largeD":320,"zoom":2,"n_img":100
        ,"model_name":"model_pers","baseDir":"/home/sabeiro/tmp/pers/"
        ,"imgDir":"/home/sabeiro/tmp/pers/heim/h/","isS3":False}
 

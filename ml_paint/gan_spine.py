@@ -102,9 +102,9 @@ def prepImg(fL,opt):
             if f != opt['nameF']: continue
         if opt['catF']:
             if name != opt['catF']: continue
-        if opt['isS3']: img = readPicS3(projDir + f)
-        else: img = readPic(projDir + f)
-        img = cv2.resize(img,dsize=(256,320),interpolation=cv2.INTER_CUBIC)
+        if opt['isS3']: img = readPicS3(f)
+        else: img = readPic(f)
+        img = cv2.resize(img,dsize=(opt['smallD'],opt['largeD']),interpolation=cv2.INTER_CUBIC)
         img = normImg(img)
         if img.shape[1]>img.shape[0]: rotation = True
         if opt['isBlur']: blur = cv2.GaussianBlur(img,(3, 3), 30)
@@ -140,8 +140,8 @@ def superRes(fL,opt):
             if f != opt['nameF']: continue
             if opt['catF']:
                 if name != opt['catF']: continue
-        if opt['isS3']: img = readPicS3(projDir + f)
-        else: img = readPic(projDir + f)
+        if opt['isS3']: img = readPicS3(f)
+        else: img = readPic(f)
         img = normImg(img)
         if img.shape[1]>img.shape[0]: rotation = True
         if opt['isBlur']: img = cv2.GaussianBlur(img,(23, 23), 30)
